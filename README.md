@@ -1,34 +1,122 @@
-This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+<p align="center">
+ <img src="https://user-images.githubusercontent.com/9203826/154288895-670f5c23-81a1-4307-a080-1af83f7f8356.svg" align="center" alt="Ledger" />
+ <h2 align="center">Platform App Web Browser</h2>
+ <p align="center">Run your Web Application inside <a href="https://www.ledger.com/ledger-live">Ledger Live</a></p>
+</p>
+  <p align="center">
+    <a href="https://opensource.org/licenses/Apache-2.0">
+      <img alt="License" src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" />
+    </a>
+    <a href="https://github.com/LedgerHQ/platform-app-web-browser/issues">
+      <img alt="Issues" src="https://img.shields.io/github/issues/LedgerHQ/platform-app-web-browser?color=0088ff" />
+    </a>
+    <a href="https://github.com/LedgerHQ/platform-app-web-browser/pulls">
+      <img alt="GitHub pull requests" src="https://img.shields.io/github/issues-pr/LedgerHQ/platform-app-web-browser?color=0088ff" />
+    </a>
+    <a href="https://discord.gg/y6nZhxv2bC">
+      <img alt="Discord" src="https://img.shields.io/discord/885256081289379850?color=1C1CE1&label=Ledger%20%7C%20Discord%20%F0%9F%91%8B%20&style=flat-square" />
+    </a>
+   
+   
+  </p>
 
-## Getting Started
+  <p align="center">
+    <a href="https://developers.ledger.com/docs/live-app/start-here/">Full documentation</a>
+    ·
+    <a href="https://github.com/LedgerHQ/platform-app-web-browser/issues/new/choose">Report Bug</a>
+    ·
+    <a href="https://github.com/LedgerHQ/platform-app-web-browser/issues/new/choose">Request Feature</a>
+  </p>
+</p>
 
-First, run the development server:
+# Purpose
+
+This is an application leveraging [Ledger Platform SDK](https://github.com/LedgerHQ/live-app-sdk) to run websites needing cryptocurency address inside a Ledger product (for example [Ledger Live](https://www.ledger.com/ledger-live)).
+Some examples of websites that can be used with this Web Browser are [rainbow.me](https://rainbow.me/) or [poap.xyz](https://poap.xyz/).
+
+# How to use it
+
+To make your website use this application, you will need to create a manifest and customize the `params` object based on your website.
+
+Here is an example for the [rainbow.me](https://rainbow.me/) website (with the Web Browser running in local hence the `"url": "http://localhost:3000"`):
+
+```json
+{
+  "id": "rainbow",
+  "name": "Rainbow.me",
+  "url": "http://localhost:3000",
+  "params": {
+    "webUrl": "https://rainbow.me/{account.address}",
+    "webAppName": "Rainbow.me",
+    "currencies": ["ethereum"]
+  },
+  "homepageUrl": "https://rainbow.me",
+  "icon": "https://cdn.live.ledger.com/icons/platform/rainbow.png",
+  "platform": "all",
+  "apiVersion": "^1.0.0 || ~0.0.1",
+  "manifestVersion": "1",
+  "branch": "stable",
+  "categories": ["nft"],
+  "currencies": ["ethereum"],
+  "content": {
+    "shortDescription": {
+      "en": "An easy way to visualize the NFT secured by your hardware wallet."
+    },
+    "description": {
+      "en": "An easy way to visualize the NFT secured by your hardware wallet."
+    }
+  },
+  "permissions": [],
+  "domains": ["https://*"]
+}
+```
+
+Here is a description of the `params` fields:
+
+- `webUrl`: the url of your website. Use the `{account.address}` placeholder in the url where you expect a cryptocurency address to be provided.
+- `webAppName`: the user readable name of your website
+- `currencies`: the list of currencies handled by you website
+
+# How to run it
+
+This is a [nextjs](https://nextjs.org/) bootstrapped application, don't hesitate to head over to their website and doc for further details on this framework.
+
+## Install dependencies
 
 ```bash
-npm run dev
-# or
+yarn
+```
+
+## Run locally
+
+```bash
 yarn dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Format
 
-You can start editing the page by modifying `pages/index.tsx`. The page auto-updates as you edit the file.
+Check code formatting with
 
-[API routes](https://nextjs.org/docs/api-routes/introduction) can be accessed on [http://localhost:3000/api/hello](http://localhost:3000/api/hello). This endpoint can be edited in `pages/api/hello.ts`.
+```bash
+yarn format:check
+```
 
-The `pages/api` directory is mapped to `/api/*`. Files in this directory are treated as [API routes](https://nextjs.org/docs/api-routes/introduction) instead of React pages.
+Format source files in-place with
 
-## Learn More
+```bash
+yarn format:fix
+```
 
-To learn more about Next.js, take a look at the following resources:
+## Lint
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Check code quality with
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js/) - your feedback and contributions are welcome!
+```bash
+yarn lint:check
+```
 
-## Deploy on Vercel
+Automatically fix code quality problems with
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/deployment) for more details.
+```bash
+yarn lint:fix
+```
