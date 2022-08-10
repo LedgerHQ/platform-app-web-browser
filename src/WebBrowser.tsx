@@ -1,12 +1,9 @@
-import React from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import CSSTransition from "react-transition-group/CSSTransition";
 import styled from "styled-components";
 
 import type { Account } from "@ledgerhq/live-app-sdk";
-import LedgerLiveApi, {
-  Mock as LedgerLiveApiMock,
-  WindowMessageTransport,
-} from "@ledgerhq/live-app-sdk";
+import LedgerLiveApi, { WindowMessageTransport } from "@ledgerhq/live-app-sdk";
 
 import AccountRequest from "./components/AccountRequest";
 import ControlBar from "./components/ControlBar";
@@ -70,7 +67,6 @@ type WebBrowserProps = {
   webUrl: string;
   webAppName: string;
   currencies: string[];
-  mock?: boolean;
   initialAccountId: string | undefined;
 };
 
@@ -83,25 +79,36 @@ type WebBrowserState = {
   cookiesBlocked: boolean;
 };
 
-const getInitialState = (): WebBrowserState => {
-  return {
-    accounts: [],
-    selectedAccount: undefined,
-    clientLoaded: false,
-    fetchingAccounts: false,
-    connected: false,
-    cookiesBlocked: false,
-  };
+const initialState = {
+  accounts: [],
+  selectedAccount: undefined,
+  clientLoaded: false,
+  fetchingAccounts: false,
+  connected: false,
+  cookiesBlocked: false,
 };
 
-export class WebBrowser extends React.Component<
-  WebBrowserProps,
-  WebBrowserState
-> {
-  ledgerAPI: LedgerLiveApi | LedgerLiveApiMock;
-  iframeRef = React.createRef<HTMLIFrameElement>();
+export const WebBrowser = ({
+  webUrl,
+  webAppName,
+  currencies,
+  initialAccountId,
+}: WebBrowserProps) => {
+  const [state, setState] = useState<WebBrowserState>(initialState);
 
-  wrapThirdPartyCookiesErrorHandler =
+  const {
+    accounts,
+    selectedAccount,
+    clientLoaded,
+    connected,
+    fetchingAccounts,
+    cookiesBlocked,
+  } = state;
+
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  const ledgerAPIRef = useRef<LedgerLiveApi | null>(null);
+
+  const wrapThirdPartyCookiesErrorHandler =
     <T extends unknown[], R>(cb: (...args: T) => R) =>
     (...args: T) => {
       try {
@@ -110,191 +117,176 @@ export class WebBrowser extends React.Component<
         // specifically catch 'Access is denied...' error on `localStorage`
         // (means that third-party cookies are disabled on host)
         if (err instanceof DOMException && err.code === 18) {
-          console.dir(err);
-          this.setState({ cookiesBlocked: true });
+          setState((s) => ({ ...s, cookiesBlocked: true }));
         } else {
           throw err;
         }
       }
     };
 
-  localStorage = {
-    setItem: this.wrapThirdPartyCookiesErrorHandler(
-      (key: string, val: string) => localStorage.setItem(key, val)
-    ),
-    getItem: this.wrapThirdPartyCookiesErrorHandler((key: string) =>
-      localStorage.getItem(key)
-    ),
-  };
+  const localStorageSet = wrapThirdPartyCookiesErrorHandler(
+    (key: string, val: string) => localStorage.setItem(key, val)
+  );
 
-  constructor(props: WebBrowserProps) {
-    super(props);
-    this.state = getInitialState();
+  const localStorageGet = wrapThirdPartyCookiesErrorHandler((key: string) =>
+    localStorage.getItem(key)
+  );
 
-    this.setClientLoaded = this.setClientLoaded.bind(this);
-    this.selectAccount = this.selectAccount.bind(this);
-    this.requestAccount = this.requestAccount.bind(this);
-    this.fetchAccounts = this.fetchAccounts.bind(this);
-    this.getUrl = this.getUrl.bind(this);
+  const webAppUrl = useMemo(() => {
+    const { selectedAccount } = state;
+    const webAppUrl = webUrl;
 
-    this.ledgerAPI = props.mock
-      ? new LedgerLiveApiMock()
-      : new LedgerLiveApi(new WindowMessageTransport());
-  }
+    if (!selectedAccount) return "";
 
-  async fetchAccounts() {
-    this.setState({
+    return webAppUrl.replace("{account.address}", selectedAccount.address);
+  }, [webUrl, state.selectedAccount]);
+
+  const setClientLoaded = useCallback(() => {
+    setState((currentState) => ({
+      ...currentState,
+      clientLoaded: true,
+    }));
+  }, [setState]);
+
+  const selectAccount = useCallback(
+    (account: Account | undefined) => {
+      setState((currentState) => ({
+        ...currentState,
+        selectedAccount: account,
+      }));
+
+      if (account) {
+        if (typeof window !== "undefined") {
+          localStorageSet("accountId", account.id);
+        }
+      }
+    },
+    [setState]
+  );
+
+  const requestAccount = useCallback(async () => {
+    try {
+      const payload = {
+        currencies,
+        allowAddAccount: true,
+      };
+      if (ledgerAPIRef.current) {
+        const account = await ledgerAPIRef.current.requestAccount(payload);
+        selectAccount(account);
+      }
+    } catch (error) {
+      // TODO: handle error
+    }
+  }, [currencies]);
+
+  const fetchAccounts = useCallback(async () => {
+    if (!ledgerAPIRef.current) {
+      return;
+    }
+
+    setState((currentState) => ({
+      ...currentState,
       fetchingAccounts: true,
-    });
-    const currencies = this.props.currencies || [];
-    const accounts = await this.ledgerAPI.listAccounts();
-    const filteredAccounts = currencies.length
-      ? accounts.filter(
-          (account: Account) => currencies.indexOf(account.currency) > -1
-        )
-      : accounts;
+    }));
 
-    const initialAccount = this.props.initialAccountId
-      ? accounts.find(
-          (account: Account) => account.id === this.props.initialAccountId
-        )
+    const accounts = await ledgerAPIRef.current.listAccounts();
+
+    // filter all accounts matching allowed currencies
+    const filteredAccounts = accounts.filter((account: Account) =>
+      currencies.includes(account.currency)
+    );
+
+    // check if there is a initial account
+    const initialAccount = initialAccountId
+      ? filteredAccounts.find((account) => account.id === initialAccountId)
       : undefined;
+
+    // get accountId from localstorage
     const storedAccountId: string | null =
       typeof window !== "undefined"
-        ? this.localStorage.getItem("accountId") || null
+        ? localStorageGet("accountId") || null
         : null;
+
+    // check if an account was saved in localstotage
     const storedAccount =
       storedAccountId !== null
-        ? accounts.find((account: Account) => account.id === storedAccountId)
+        ? filteredAccounts.find((account) => account.id === storedAccountId)
         : undefined;
 
+    // establish the selected account by order of importance
     const selectedAccount =
       filteredAccounts.length > 0
         ? initialAccount || storedAccount || filteredAccounts[0]
         : undefined;
 
-    this.setState({
+    setState((currentState) => ({
+      ...currentState,
       accounts: filteredAccounts,
       fetchingAccounts: false,
       selectedAccount,
+    }));
+  }, [currencies, setState, initialAccountId]);
+
+  useEffect(() => {
+    const ledgerAPI = new LedgerLiveApi(new WindowMessageTransport());
+    ledgerAPI.connect();
+    ledgerAPIRef.current = ledgerAPI;
+
+    return () => {
+      setState((currentState) => ({
+        ...currentState,
+        connected: false,
+      }));
+    };
+  }, []);
+
+  useEffect(() => {
+    fetchAccounts().then(() => {
+      setState((currentState) => ({
+        ...currentState,
+        connected: true,
+      }));
     });
+  }, [fetchAccounts]);
+
+  if (cookiesBlocked) {
+    return <CookiesBlocked />;
   }
 
-  async requestAccount() {
-    try {
-      const currencies = this.props.currencies;
-      const payload = currencies.length
-        ? {
-            currencies,
-          }
-        : {};
-      const account = await this.ledgerAPI.requestAccount(payload);
-      this.selectAccount(account);
-    } catch (error) {
-      // TODO: handle error
-    }
-  }
-
-  async componentDidMount() {
-    this.ledgerAPI.connect();
-
-    await this.fetchAccounts();
-
-    this.setState({
-      connected: true,
-    });
-  }
-
-  componentWillUnmount() {
-    this.setState({
-      connected: false,
-    });
-  }
-
-  selectAccount(account: Account | undefined) {
-    if (account) {
-      if (typeof window !== "undefined") {
-        this.localStorage.setItem("accountId", account.id);
-      }
-    }
-
-    this.setState({
-      selectedAccount: account,
-    });
-  }
-
-  setClientLoaded() {
-    this.setState({
-      clientLoaded: true,
-    });
-  }
-
-  getUrl() {
-    const { selectedAccount } = this.state;
-    const { webUrl } = this.props;
-
-    if (!selectedAccount) return "";
-
-    return webUrl.replace("{account.address}", selectedAccount.address);
-  }
-
-  render() {
-    const {
-      accounts,
-      clientLoaded,
-      fetchingAccounts,
-      connected,
-      selectedAccount,
-      cookiesBlocked,
-    } = this.state;
-
-    const { webAppName } = this.props;
-
-    const url = this.getUrl();
-
-    if (cookiesBlocked) {
-      return <CookiesBlocked />;
-    }
-
-    return (
-      <AppLoaderPageContainer>
-        <ControlBar desktop>
+  return (
+    <AppLoaderPageContainer>
+      <ControlBar desktop>
+        <AccountRequest
+          selectedAccount={selectedAccount}
+          onRequestAccount={requestAccount}
+        />
+      </ControlBar>
+      <Container>
+        <CSSTransition in={clientLoaded} timeout={300} classNames="overlay">
+          <Overlay>
+            <Loader>
+              {!connected
+                ? "Connecting ..."
+                : fetchingAccounts
+                ? "Loading accounts ..."
+                : accounts.length === 0
+                ? "You don't have any accounts"
+                : `Loading ${webAppName} ...`}
+            </Loader>
+          </Overlay>
+        </CSSTransition>
+        {connected && webAppUrl ? (
+          <Iframe ref={iframeRef} src={webAppUrl} onLoad={setClientLoaded} />
+        ) : null}
+      </Container>
+      {!!accounts.length && (
+        <ControlBar mobile>
           <AccountRequest
             selectedAccount={selectedAccount}
-            onRequestAccount={this.requestAccount}
+            onRequestAccount={requestAccount}
           />
         </ControlBar>
-        <Container>
-          <CSSTransition in={clientLoaded} timeout={300} classNames="overlay">
-            <Overlay>
-              <Loader>
-                {!connected
-                  ? "Connecting ..."
-                  : fetchingAccounts
-                  ? "Loading accounts ..."
-                  : accounts.length === 0
-                  ? "You don't have any accounts"
-                  : `Loading ${webAppName} ...`}
-              </Loader>
-            </Overlay>
-          </CSSTransition>
-          {connected && url ? (
-            <Iframe
-              ref={this.iframeRef}
-              src={url}
-              onLoad={this.setClientLoaded}
-            />
-          ) : null}
-        </Container>
-        {!!accounts.length && (
-          <ControlBar mobile>
-            <AccountRequest
-              selectedAccount={selectedAccount}
-              onRequestAccount={this.requestAccount}
-            />
-          </ControlBar>
-        )}
-      </AppLoaderPageContainer>
-    );
-  }
-}
+      )}
+    </AppLoaderPageContainer>
+  );
+};
