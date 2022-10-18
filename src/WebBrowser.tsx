@@ -276,7 +276,12 @@ export const WebBrowser = ({
           </Overlay>
         </CSSTransition>
         {connected && webAppUrl ? (
-          <Iframe ref={iframeRef} src={webAppUrl} onLoad={setClientLoaded} />
+          <Iframe
+            ref={iframeRef}
+            src={webAppUrl}
+            allow="clipboard-read; clipboard-write"
+            onLoad={setClientLoaded}
+          />
         ) : null}
       </Container>
       {!!accounts.length && (
