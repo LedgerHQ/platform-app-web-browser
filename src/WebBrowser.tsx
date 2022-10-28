@@ -1,3 +1,4 @@
+import { Button, Flex, Text } from "@ledgerhq/react-ui";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import CSSTransition from "react-transition-group/CSSTransition";
 import styled from "styled-components";
@@ -264,15 +265,31 @@ export const WebBrowser = ({
       <Container>
         <CSSTransition in={clientLoaded} timeout={300} classNames="overlay">
           <Overlay>
-            <Loader>
-              {!connected
-                ? "Connecting ..."
-                : fetchingAccounts
-                ? "Loading accounts ..."
-                : accounts.length === 0
-                ? "You don't have any accounts"
-                : `Loading ${webAppName} ...`}
-            </Loader>
+            {!connected ? (
+              <Loader>
+                <Text color="neutral.c100">{"Connecting ..."}</Text>
+              </Loader>
+            ) : fetchingAccounts ? (
+              <Loader>
+                <Text color="neutral.c100">{"Loading accounts ..."}</Text>
+              </Loader>
+            ) : accounts.length === 0 ? (
+              <Flex flexDirection="column" alignItems="center">
+                <Text mb={6} color="neutral.c100">
+                  {"You need an account to access this app."}
+                </Text>
+                <Button onClick={requestAccount} variant="main">
+                  {"Add Account"}
+                </Button>
+              </Flex>
+            ) : (
+              <Loader>
+                <Text
+                  variant="h5"
+                  color="neutral.c100"
+                >{`Loading ${webAppName} ...`}</Text>
+              </Loader>
+            )}
           </Overlay>
         </CSSTransition>
         {connected && webAppUrl ? (
